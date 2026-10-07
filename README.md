@@ -57,6 +57,23 @@ openalex_api_key: ""
 
 `max_works_per_query` 越大，覆盖越广，但 API 请求和噪声也越多。第一次建议 300 至 500。
 
+### 排除不相关主题和作者
+
+可通过 `topic_blacklist` 排除 OpenAlex 论文主主题包含指定词语的论文。程序会在统计研究者、机构和合作网络之前过滤这些论文；主题文字不区分大小写，按包含关系匹配。当前配置排除了心衰治疗和心脏/冠脉外科主题。
+
+若某位研究者仍出现在结果中，可将其 OpenAlex 作者 ID 或完整姓名加入 `author_blacklist`：
+
+```yaml
+topic_blacklist:
+  - "Heart Failure Treatment and Management"
+  - "Cardiac and Coronary Surgery Techniques"
+author_blacklist:
+  - "A5017272571"
+  - "Researcher Full Name"
+```
+
+作者姓名按完整名称、不区分大小写匹配；优先使用 OpenAlex ID，避免同名误排。调整查询词以更贴近目标课题，并配合黑名单过滤能进一步降低检索噪声。修改 `config.yaml` 后重新运行程序以更新输出。
+
 ## GitHub Actions 自动更新
 
 1. 在 GitHub 新建一个空仓库。

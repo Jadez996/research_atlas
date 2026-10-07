@@ -5,6 +5,12 @@ queries:
   - "water in two-dimensional channels"
   - "interfacial water"
   - "water in nanoslit"
+# Work is excluded when its OpenAlex primary topic contains any of these phrases.
+topic_blacklist:
+  - "Heart Failure Treatment and Management"
+  - "Cardiac and Coronary Surgery Techniques"
+# Add exact author names or OpenAlex IDs (for example: "A1234567890") to exclude researchers.
+author_blacklist: []
 from_year: 1960
 max_works_per_query: 2000
 min_author_works: 3

@@ -28,6 +28,10 @@ def load_config(path: str) -> dict[str, Any]:
     missing = [k for k in required if not cfg.get(k)]
     if missing:
         raise ValueError(f"Missing config keys: {', '.join(missing)}")
+    for key in ("author_blacklist", "topic_blacklist"):
+        values = cfg.get(key, [])
+        if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+            raise ValueError(f"Config key '{key}' must be a list of strings")
     return cfg
 
 
@@ -87,6 +91,19 @@ def short_id(value: str | None) -> str:
     return (value or "").rsplit("/", 1)[-1]
 
 
+def filter_works_by_topic(works: list[dict[str, Any]], cfg: dict[str, Any]) -> list[dict[str, Any]]:
+    blocked_topics = [topic.strip().casefold() for topic in cfg.get("topic_blacklist", []) if topic.strip()]
+    if not blocked_topics:
+        return works
+    return [
+        work for work in works
+        if not any(
+            blocked in ((work.get("primary_topic") or {}).get("display_name") or "").casefold()
+            for blocked in blocked_topics
+        )
+    ]
+
+
 def deduplicate_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_id = {}
     for work in works:
@@ -98,6 +115,10 @@ def deduplicate_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def analyse(works: list[dict[str, Any]], cfg: dict[str, Any]) -> tuple[pd.DataFrame, pd.DataFrame, nx.Graph]:
     now_year = datetime.now(timezone.utc).year
     recent_start = now_year - int(cfg.get("rising_window_years", 5)) + 1
+    works = filter_works_by_topic(works, cfg)
+    author_blacklist = cfg.get("author_blacklist", [])
+    blacklisted_names = {value.strip().casefold() for value in author_blacklist}
+    blacklisted_ids = {short_id(value).casefold() for value in author_blacklist}
     authors: dict[str, dict[str, Any]] = {}
     institution_stats: dict[str, dict[str, Any]] = {}
     graph = nx.Graph()
@@ -114,24 +135,29 @@ def analyse(works: list[dict[str, Any]], cfg: dict[str, Any]) -> tuple[pd.DataFr
             if not aid:
                 continue
             name = author.get("display_name") or aid
+            is_blocked_author = (
+                aid.casefold() in blacklisted_ids or name.strip().casefold() in blacklisted_names
+            )
             institutions = authorship.get("institutions") or []
             inst_names = [i.get("display_name") for i in institutions if i.get("display_name")]
             inst_ids = [short_id(i.get("id")) for i in institutions if i.get("id")]
-            rec = authors.setdefault(aid, {
-                "author_id": aid, "name": name, "works": 0, "citations": 0,
-                "recent_works": 0, "recent_citations": 0,
-                "institutions": Counter(), "topics": Counter(), "years": Counter()
-            })
-            rec["works"] += 1
-            rec["citations"] += citations
-            rec["years"][year] += 1
-            if year >= recent_start:
-                rec["recent_works"] += 1
-                rec["recent_citations"] += citations
-            if topic:
-                rec["topics"][topic] += 1
+            if not is_blocked_author:
+                rec = authors.setdefault(aid, {
+                    "author_id": aid, "name": name, "works": 0, "citations": 0,
+                    "recent_works": 0, "recent_citations": 0,
+                    "institutions": Counter(), "topics": Counter(), "years": Counter()
+                })
+                rec["works"] += 1
+                rec["citations"] += citations
+                rec["years"][year] += 1
+                if year >= recent_start:
+                    rec["recent_works"] += 1
+                    rec["recent_citations"] += citations
+                if topic:
+                    rec["topics"][topic] += 1
             for iid, iname in zip(inst_ids, inst_names):
-                rec["institutions"][iname] += 1
+                if not is_blocked_author:
+                    rec["institutions"][iname] += 1
                 inst = institution_stats.setdefault(iid or iname, {
                     "institution_id": iid, "institution": iname, "works": set(),
                     "fractional_works": 0.0, "citations": 0, "authors": Counter()
@@ -139,8 +165,10 @@ def analyse(works: list[dict[str, Any]], cfg: dict[str, Any]) -> tuple[pd.DataFr
                 inst["works"].add(work.get("id"))
                 inst["fractional_works"] += 1 / max(len(inst_names), 1)
                 inst["citations"] += citations
-                inst["authors"][name] += 1
-            work_authors.append((aid, name))
+                if not is_blocked_author:
+                    inst["authors"][name] += 1
+            if not is_blocked_author:
+                work_authors.append((aid, name))
 
         unique = list(dict(work_authors).items())
         for aid, name in unique:
@@ -265,6 +293,10 @@ def main() -> None:
         all_works.extend(client.search_works(query, int(cfg["from_year"]), int(cfg.get("max_works_per_query", 500))))
     works = deduplicate_works(all_works)
     print(f"Unique works: {len(works)}")
+    filtered_works = filter_works_by_topic(works, cfg)
+    if len(filtered_works) != len(works):
+        print(f"Works excluded by topic blacklist: {len(works) - len(filtered_works)}")
+    works = filtered_works
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
