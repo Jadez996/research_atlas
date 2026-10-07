@@ -12,7 +12,7 @@ topic_blacklist:
 # Add exact author names or OpenAlex IDs (for example: "A1234567890") to exclude researchers.
 author_blacklist: []
 from_year: 1960
-max_works_per_query: 2000
+max_works_per_query: 1500
 min_author_works: 3
 top_n: 100
 rising_window_years: 5
