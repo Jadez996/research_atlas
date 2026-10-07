@@ -19,6 +19,12 @@ import yaml
 from pyvis.network import Network
 
 BASE = "https://api.openalex.org"
+ALLOWED_DOMAINS = [
+    "Physics",
+    "Materials Science",
+    "Chemistry",
+    "Engineering",
+]
 
 
 def load_config(path: str) -> dict[str, Any]:
@@ -104,6 +110,25 @@ def filter_works_by_topic(works: list[dict[str, Any]], cfg: dict[str, Any]) -> l
     ]
 
 
+def filter_works_by_domain(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    allowed_domains = {domain.casefold() for domain in ALLOWED_DOMAINS}
+    allowed_domains.add("physics and astronomy")
+    filtered = []
+    for work in works:
+        primary_topic = work.get("primary_topic") or {}
+        classifications = (
+            primary_topic.get("field"),
+            primary_topic.get("subfield"),
+        )
+        if any(
+            isinstance(classification, dict)
+            and (classification.get("display_name") or "").casefold() in allowed_domains
+            for classification in classifications
+        ):
+            filtered.append(work)
+    return filtered
+
+
 def deduplicate_works(works: list[dict[str, Any]]) -> list[dict[str, Any]]:
     by_id = {}
     for work in works:
@@ -116,6 +141,7 @@ def analyse(works: list[dict[str, Any]], cfg: dict[str, Any]) -> tuple[pd.DataFr
     now_year = datetime.now(timezone.utc).year
     recent_start = now_year - int(cfg.get("rising_window_years", 5)) + 1
     works = filter_works_by_topic(works, cfg)
+    works = filter_works_by_domain(works)
     author_blacklist = cfg.get("author_blacklist", [])
     blacklisted_names = {value.strip().casefold() for value in author_blacklist}
     blacklisted_ids = {short_id(value).casefold() for value in author_blacklist}
@@ -296,7 +322,10 @@ def main() -> None:
     filtered_works = filter_works_by_topic(works, cfg)
     if len(filtered_works) != len(works):
         print(f"Works excluded by topic blacklist: {len(works) - len(filtered_works)}")
-    works = filtered_works
+    domain_filtered_works = filter_works_by_domain(filtered_works)
+    if len(domain_filtered_works) != len(filtered_works):
+        print(f"Works excluded by discipline filter: {len(filtered_works) - len(domain_filtered_works)}")
+    works = domain_filtered_works
 
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)

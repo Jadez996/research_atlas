@@ -1,14 +1,18 @@
 import unittest
 
-from research_atlas import analyse, filter_works_by_topic
+from research_atlas import analyse, filter_works_by_domain, filter_works_by_topic
 
 
-def make_work(work_id, topic, authors):
+def make_work(work_id, topic, authors, field="Materials Science", subfield=None):
     return {
         "id": work_id,
         "publication_year": 2024,
         "cited_by_count": 10,
-        "primary_topic": {"display_name": topic},
+        "primary_topic": {
+            "display_name": topic,
+            "field": {"display_name": field} if field else None,
+            "subfield": {"display_name": subfield} if subfield else None,
+        },
         "authorships": [
             {
                 "author": {"id": f"https://openalex.org/{author_id}", "display_name": name},
@@ -66,6 +70,35 @@ class BlacklistTests(unittest.TestCase):
         cfg = {**self.cfg, "author_blacklist": ["manually excluded"]}
         authors, _, _ = analyse(self.works, cfg)
         self.assertEqual(authors["name"].tolist(), ["Target Researcher"])
+
+
+class DomainFilterTests(unittest.TestCase):
+    def test_only_allowed_disciplines_are_kept(self):
+        works = [
+            make_work("physics", "Physics topic", [], field="Physics and Astronomy"),
+            make_work("materials", "Materials topic", [], field="Materials Science"),
+            make_work("chemistry", "Chemistry topic", [], field="Chemistry"),
+            make_work("engineering", "Engineering topic", [], field="Engineering"),
+            make_work("medicine", "Medical topic", [], field="Medicine"),
+            make_work("unclassified", "No classification", [], field=None),
+        ]
+
+        filtered = filter_works_by_domain(works)
+        self.assertEqual(
+            [work["id"] for work in filtered],
+            ["physics", "materials", "chemistry", "engineering"],
+        )
+
+    def test_allowed_discipline_can_be_identified_by_subfield(self):
+        work = make_work(
+            "physics-subfield",
+            "Physics topic",
+            [],
+            field="Physical Sciences",
+            subfield="Physics",
+        )
+
+        self.assertEqual(filter_works_by_domain([work]), [work])
 
 
 if __name__ == "__main__":

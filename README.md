@@ -59,6 +59,8 @@ openalex_api_key: ""
 
 ### 排除不相关主题和作者
 
+程序只保留 OpenAlex 学科分类中属于 Physics、Materials Science、Chemistry 或 Engineering 的论文，其他领域（包括医学）会在研究者、机构和合作网络统计前过滤。Physics 同时匹配 OpenAlex 的 “Physics and Astronomy” 分类。允许的学科列表定义在 `research_atlas.py` 的 `ALLOWED_DOMAINS` 中。
+
 可通过 `topic_blacklist` 排除 OpenAlex 论文主主题包含指定词语的论文。程序会在统计研究者、机构和合作网络之前过滤这些论文；主题文字不区分大小写，按包含关系匹配。当前配置排除了心衰治疗和心脏/冠脉外科主题。
 
 若某位研究者仍出现在结果中，可将其 OpenAlex 作者 ID 或完整姓名加入 `author_blacklist`：
