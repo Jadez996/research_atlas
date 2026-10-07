@@ -1,0 +1,13 @@
+field_name: confined-water
+queries:
+  - "confined water"
+  - "nanofluidics water"
+  - "water in two-dimensional channels"
+from_year: 2000
+max_works_per_query: 500
+min_author_works: 3
+top_n: 100
+rising_window_years: 5
+mailto: "your_email@example.com"
+# Optional. Keep empty for basic free use, or set the OPENALEX_API_KEY secret in GitHub.
+openalex_api_key: ""
